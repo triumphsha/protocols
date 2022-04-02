@@ -68,6 +68,23 @@ namespace 智能电容器
             //result = System.Net.IPAddress.HostToNetworkOrder(result);
         }
 
+        internal static bool DataTrans(byte[] input_buf, int data_pos, byte type, byte[] output_buf)
+        {
+            throw new NotImplementedException();
+        }
+
+        internal static byte CSCheck(byte[] sendbuf, int offset, int len)
+        {
+            byte checksum = 0;
+
+            for(int i=0;i<len;i++)
+            {
+                checksum += sendbuf[offset+i];
+            }
+
+            return checksum;
+        }
+
         internal static string CreateSNFromXml(string v)
         {
             string result = "";
@@ -247,21 +264,71 @@ namespace 智能电容器
 
         //    return result;
         //}
+        //// <summary>
+        /// 结构体转byte数组
+        /// </summary>
+        /// <param name="structObj">要转换的结构体</param>
+        /// <returns>转换后的byte数组</returns>
+        public static byte[] StructToBytes(object structObj)
+        {
+            //得到结构体的大小
+            int size = Marshal.SizeOf(structObj);
+            //创建byte数组
+            byte[] bytes = new byte[size];
+            //分配结构体大小的内存空间
+            IntPtr structPtr = Marshal.AllocHGlobal(size);
+            //将结构体拷到分配好的内存空间
+            Marshal.StructureToPtr(structObj, structPtr, false);
+            //从内存空间拷到byte数组
+            Marshal.Copy(structPtr, bytes, 0, size);
+            //释放内存空间
+            Marshal.FreeHGlobal(structPtr);
+            //返回byte数组
+            return bytes;
+        }
 
+
+        /// <summary>
+        /// byte数组转结构体
+        /// </summary>
+        /// <param name="bytes">byte数组</param>
+        /// <param name="type">结构体类型</param>
+        /// <returns>转换后的结构体</returns>
+        public static object BytesToStruct(byte[] bytes, Type type)
+        {
+            //得到结构体的大小
+            int size = Marshal.SizeOf(type);
+            //byte数组长度小于结构体的大小
+            if (size > bytes.Length)
+            {
+                //返回空
+                return null;
+            }
+            //分配结构体大小的内存空间
+            IntPtr structPtr = Marshal.AllocHGlobal(size);
+            //将byte数组拷到分配好的内存空间
+            Marshal.Copy(bytes, 0, structPtr, size);
+            //将内存空间转换为目标结构体
+            object obj = Marshal.PtrToStructure(structPtr, type);
+            //释放内存空间
+            Marshal.FreeHGlobal(structPtr);
+            //返回结构体
+            return obj;
+        }
 
         /// <summary>
         ///  
         /// </summary>
         /// <param name="obj"></param>
         /// <param name="source"></param>
-        internal static void memcopytostruct(ref FrameHeadStr obj, Type t, Byte[] source, int srclen)
+        internal static void memcopytostruct(ref object obj, Type t, Byte[] source, int srclen)
         {
             int stcLen = Marshal.SizeOf(obj);
             IntPtr ptrTemp = IntPtr.Zero;
 
             ptrTemp = Marshal.AllocHGlobal(Marshal.SizeOf(obj));
             Marshal.Copy(source, 0, ptrTemp, srclen);
-            obj = (FrameHeadStr)Marshal.PtrToStructure(ptrTemp, t);     // 有可能len比结构长度小
+            obj = Marshal.PtrToStructure(ptrTemp, t);     // 有可能len比结构长度小
             Marshal.FreeHGlobal(ptrTemp);
         }
         /// <summary>

@@ -7,6 +7,7 @@ using System.IO.Ports;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Collections;
+using DevComponents.DotNetBar.SuperGrid;
 
 namespace 智能电容器
 {
@@ -23,6 +24,8 @@ namespace 智能电容器
         public static CComm[] Comms = new CComm[MAX_COMM_NUM] { null, null, null, null, null };
 
         public static int ProtocolAddress;
+
+        public static byte[] CommAddress = new byte[6];  // 断路器通信地址
 
         public static int CommNum;
 
@@ -147,6 +150,8 @@ namespace 智能电容器
         /// </summary>
         public int FrameResope { get; set; }
         public int Address { get { return mSendContent[0]; } }
+
+        public GridRow ShowRow { get; internal set; }
 
         /// <summary>
         /// 构造函数
@@ -663,7 +668,7 @@ namespace 智能电容器
         /// <summary>
         /// 通道规约
         /// </summary>
-        public CProtocol Protocol { get; private set; }
+        public CProtocol Protocol { get; set; }
         /// <summary>
         /// 通道标志
         /// </summary>
@@ -948,7 +953,7 @@ namespace 智能电容器
             {
                 parseResult = Protocol.parseframe(gettemp, (Byte)datalen, out rsttemp,ref handlelen);
                 
-                if (handlelen > 0 && parseResult>= CModbushost.SUC_REGISTRTU)
+                if (handlelen > 0 && parseResult>= CModbushost.SUC_REGISTRTU && rsttemp!=null)
                 {
                     //CurCommFrame = GetFrame();
                     mCurCommFrame.FrameResope = parseResult;

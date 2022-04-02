@@ -88,6 +88,7 @@
     <Compile Include="CCommand.cs" />
     <Compile Include="CCXml.cs" />
     <Compile Include="CDebugInfo.cs" />
+    <Compile Include="CDL645.cs" />
     <Compile Include="CFunc.cs" />
     <Compile Include="CModbushost.cs" />
     <Compile Include="frmmain.cs">

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Xml;
 using CCXml;
 using System.Threading;
+using System.Runtime.InteropServices;
 
 namespace 智能电容器
 {
@@ -1757,7 +1758,7 @@ namespace 智能电容器
         /// <returns></returns>
         override public bool Execute()
         {
-            int sendlen;
+            int sendlen=0;
             byte[] sendbuf = new byte[256];
             //
             while (true)
@@ -1766,7 +1767,8 @@ namespace 智能电容器
                 {
                     case EnumCmdState.CMD_START:
                         // 获取命令描述
-                        sendlen = mPrtl.makeframe(ref mFrameHeadStr, sendbuf, false);
+                        //sendlen = mPrtl.makeframe(ref mFrameHeadStr, sendbuf, false);
+                        sendlen = mPrtl.makeframe(CFunc.StructToBytes(mFrameHeadStr), Marshal.SizeOf(mFrameHeadStr), sendbuf, ref sendlen);
                         //mCmdFrame = new CCommFrame();
                         mCmdFrame.FillContent(sendbuf, sendlen, mCommNum);
                         mCmdFrame.FrameRecvDelay = 3;
@@ -1805,12 +1807,10 @@ namespace 智能电容器
                                 mCmdState = EnumCmdState.CMD_START;
                             }
                         }
-
                         break;
                 }
                 Thread.Sleep(100);
             }
-            // return ture
         }
 
         /// <summary>

@@ -309,14 +309,14 @@
             // gridColumn4
             // 
             this.gridColumn4.CellStyles.Default.Alignment = DevComponents.DotNetBar.SuperGrid.Style.Alignment.MiddleCenter;
-            this.gridColumn4.HeaderText = "数据类型";
+            this.gridColumn4.HeaderText = "数据长度";
             this.gridColumn4.InfoImageAlignment = DevComponents.DotNetBar.SuperGrid.Style.Alignment.MiddleCenter;
             this.gridColumn4.Name = "gridColumn4";
             // 
             // gridColumn3
             // 
             this.gridColumn3.CellStyles.Default.Alignment = DevComponents.DotNetBar.SuperGrid.Style.Alignment.MiddleCenter;
-            this.gridColumn3.HeaderText = "数据长度";
+            this.gridColumn3.HeaderText = "数据类型";
             this.gridColumn3.InfoImageAlignment = DevComponents.DotNetBar.SuperGrid.Style.Alignment.MiddleCenter;
             this.gridColumn3.Name = "gridColumn3";
             // 

@@ -8,6 +8,13 @@ using System.IO;
 
 namespace 智能电容器
 {
+    enum ENUMDATATYPE
+    {
+        BCD_TYPE,
+        BIN_TYPE,
+        ACSII_TYPE
+    };
+
     enum ENUMPARAMITEM
     {
         // 参数
@@ -70,7 +77,6 @@ namespace 智能电容器
     [StructLayoutAttribute(LayoutKind.Sequential, Pack = 1)]
     public struct RegistInfo
     {
-
         public Byte starthi;              // 起始地址高
         public Byte startlw;              // 起始地址低
         public Byte amounthi;             // 输出数量高
@@ -91,6 +97,7 @@ namespace 智能电容器
         public Byte funcode;          // 规约功能
         //public SubItemInfo subitemstr;     // 响应组帧数据
         public RegistInfo affirmstr;           // 只在规约解析内部使用，调用者无需考虑
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 10)]  //[StructLayoutAttribute(LayoutKind.Sequential, Pack = 1)]
         public Byte[] values;             // 当写多个线圈或寄存器时使用该变量传递设置值
     };
 
@@ -369,7 +376,7 @@ namespace 智能电容器
             Byte[] registBytes = new Byte[7];
             SnToAddressStr CurrTableItem;
             
-            int sendlen;
+            int sendlen=0;
 
             // 发送组网命令
             switch (CurrNetWorkState)
@@ -378,10 +385,11 @@ namespace 智能电容器
                     RaiseStateEvent("广播发送组网命令");
                     framehead.address = 0;                                              // 广播发送组网命令
                     framehead.funcode = CModbushost.FUN_REGISTRTU;
-                    framehead.values = new Byte[2];
+                    framehead.values = new Byte[10];
                     framehead.values[0] = 2;                                            // 上报
                     framehead.values[1] = 10;                                           // 在10S内完成
-                    sendlen = mComm.Protocol.makeframe(ref framehead, sendbuff,false);                         //   
+                    //sendlen = mComm.Protocol.makeframe(ref framehead, sendbuff,false);                         //  
+                    sendlen = mComm.Protocol.makeframe(CFunc.StructToBytes(framehead), Marshal.SizeOf(framehead), sendbuff, ref sendlen);
                     CommFrame = new CCommFrame();
                     CommFrame.FrameRecvDelay = NETREGIST_COUNT_VALUE;
                     CommFrame.FillContent(sendbuff, sendlen, mComm.CommNum);
@@ -412,9 +420,10 @@ namespace 智能电容器
                     framehead.affirmstr.amountlw = 7;
                     registBytes[0] = (Byte)CurrTableItem.address;
                     Array.Copy(CurrTableItem.serail, 0,registBytes, 1,  6);                    
-                    framehead.values = new Byte[7];
+                    framehead.values = new Byte[10];
                     Array.Copy(registBytes, 0, framehead.values, 0,  7);
-                    sendlen=mComm.Protocol.makeframe(ref framehead, sendbuff, false);
+                    //sendlen=mComm.Protocol.makeframe(ref framehead, sendbuff, false);
+                    sendlen = mComm.Protocol.makeframe(CFunc.StructToBytes(framehead), Marshal.SizeOf(framehead), sendbuff, ref sendlen);
                     CommFrame = new CCommFrame();
                     CommFrame.FrameRecvDelay = COMMBROADCAST_COUNT_VALUE;
                     CommFrame.FillContent(sendbuff, sendlen, mComm.CommNum);
@@ -491,7 +500,8 @@ namespace 智能电容器
                     framehead.affirmstr.starthi =0x10;
                     framehead.affirmstr.amountlw = 0x03;
                     framehead.affirmstr.amounthi = 0x00;
-                    sendlen = mComm.Protocol.makeframe(ref framehead, SendBuf, false);
+                    //sendlen = mComm.Protocol.makeframe(ref framehead, SendBuf, false);
+                    sendlen = mComm.Protocol.makeframe(CFunc.StructToBytes(framehead), Marshal.SizeOf(framehead), SendBuf, ref sendlen);
                     CommFrame = new CCommFrame();
                     CommFrame.FillContent(SendBuf, sendlen, mComm.CommNum);
                     mComm.FillFrame(CommFrame);
@@ -580,7 +590,7 @@ namespace 智能电容器
             Byte[] sendbuff = new Byte[240];   // 通道缓存区，临时使用
             FrameHeadStr framehead = new FrameHeadStr();
             CommFrame = new CCommFrame();
-            int sendlen;
+            int sendlen=0;
 
             for (i = 0; i < CGlobalCtrl.MAX_VARNODE_NUM; i++)
             {
@@ -590,10 +600,12 @@ namespace 智能电容器
             // 通知节点进入组网状态
             framehead.address = 0;                                              // 广播发送组网命令
             framehead.funcode = CModbushost.FUN_REGISTRTU; 
-            framehead.values = new Byte[2];
+            framehead.values = new Byte[10];
             framehead.values[0] = 1;     // 通知
             framehead.values[1] = 0;
-            sendlen = mComm.Protocol.makeframe(ref framehead, sendbuff, false);
+
+            
+            sendlen = mComm.Protocol.makeframe(CFunc.StructToBytes(framehead),Marshal.SizeOf(framehead), sendbuff, ref sendlen);
             CommFrame.FillContent(sendbuff, sendlen, CGlobalCtrl.CommNum);
             CommFrame.FrameRecvDelay = 3;
             mComm.FillFrame(CommFrame);
@@ -683,12 +695,16 @@ namespace 智能电容器
         {
 
         }
-        public virtual int parseframe(Byte[] ptinput, int leninput, out Byte[] ptoutput, ref int lenhandle)
+        public virtual int parseframe(Byte[] input_buf, int input_len, out Byte[] output_buf, ref int handle_len)
         {
-            ptoutput = null;
+            output_buf = null;
             return 0;
         }
-        public virtual int makeframe(ref FrameHeadStr frmhead, Byte[] ptoutput, bool multwrite)
+        public virtual int checkframe(Byte[] input_buf, int input_len,ref int off_pos,ref int frame_len)
+        {
+            return 0;
+        }
+        public virtual int makeframe(Byte[] input_buf, int input_len ,Byte[] output_buf,ref int output_len)
         {
             return 0;
         }
@@ -938,14 +954,14 @@ namespace 智能电容器
         /// </summary>
         /// <param name="ptinput"></param>
         /// <param name="leninput"></param>
-        /// <param name="ptoutput"></param>
+        /// <param name="output_buf"></param>
         /// <param name="lenhandle"></param>
         /// <returns></returns>
-        public override int parseframe(Byte[] ptinput, int leninput, out Byte[] ptoutput, ref int lenhandle)
+        public override int parseframe(Byte[] ptinput, int leninput, out Byte[] output_buf, ref int lenhandle)
         {
             int startindex = 0, result = SUC_FUNCODE;
             UInt16 readnum = 0;
-            ptoutput = null;
+            output_buf = null;
 
             if (leninput < 5) return ERR_LENGTHWRONG;
 
@@ -970,9 +986,9 @@ namespace 智能电容器
                 case FUN_READLS:
                 case FUN_READBC:
                 case FUN_READSR:
-                    readnum = ptinput[startindex + 2];       // 数据长度	//memcpy((unsigned char *) & ptoutput,(unsigned char*)(ptinput + 3),readnum);		
-                    ptoutput = new Byte[readnum];
-                    Array.Copy(ptinput, startindex + 3, ptoutput, 0, readnum);
+                    readnum = ptinput[startindex + 2];       // 数据长度	//memcpy((unsigned char *) & output_buf,(unsigned char*)(ptinput + 3),readnum);		
+                    output_buf = new Byte[readnum];
+                    Array.Copy(ptinput, startindex + 3, output_buf, 0, readnum);
                     // 直接根据存储保存数据
                     // SaveModbusDataInfo(ptinput + 3, readnum);
                     break;
@@ -981,27 +997,27 @@ namespace 智能电容器
                 case FUN_WRITEMXQ:
                 case FUN_WRITEMBC:
                     readnum = 4;
-                    ptoutput = new Byte[readnum];
-                    Array.Copy(ptinput, startindex + 2, ptoutput, 0, 4);
+                    output_buf = new Byte[readnum];
+                    Array.Copy(ptinput, startindex + 2, output_buf, 0, 4);
                     break;
                 case FUN_REGISTRTU:
                     readnum = 7;
-                    ptoutput = new Byte[readnum];
-                    Array.Copy(ptinput, startindex + 2, ptoutput, 0, 7);
+                    output_buf = new Byte[readnum];
+                    Array.Copy(ptinput, startindex + 2, output_buf, 0, 7);
                     result = SUC_REGISTRTU;
                     break;
                 case FUN_WRITEVARADDR:
                     readnum = 7;
-                    ptoutput = new Byte[readnum];
-                    Array.Copy(ptinput, startindex + 2, ptoutput, 0, 7);
+                    output_buf = new Byte[readnum];
+                    Array.Copy(ptinput, startindex + 2, output_buf, 0, 7);
                     // 设置注册地址确认，可以在此处理，应该不需要处理
                     break;
                 default:
                     if ((ptinput[startindex + 1] & 0x80) > 0)           // 错误代码
                     {
                         readnum = 1;
-                        ptoutput = new Byte[readnum];
-                        ptoutput[0] = ptinput[startindex + 2];
+                        output_buf = new Byte[readnum];
+                        output_buf[0] = ptinput[startindex + 2];
                         result = SUC_ERRREPONSE;
                     }
                     break;
@@ -1014,32 +1030,38 @@ namespace 智能电容器
 
         /*********************************************************************************
         *	模块编号：
-        *	名    称：makeframe(FrameHeadStr* framehead,Byte* ptoutput,Byte multwrite)
+        *	名    称：makeframe(FrameHeadStr* framehead,Byte* output_buf,Byte multwrite)
         *	功    能：modbus规约组帧函数
         *	输入参数：
                                 framehead：组帧数据装载,字段意义参考FrameHeadStr结构说明
-                                ptoutput： 通道设备发送缓存区
+                                output_buf： 通道设备发送缓存区
                                 multwrite：多线圈或寄存器发送标志
-        *	返 回 值：长度，如为零表示错误，ptoutput[0]内为错误代码
+        *	返 回 值：长度，如为零表示错误，output_buf[0]内为错误代码
         *	修改日志： 
         *	[2017-4-19 8:45]? Ver. 1.00
         *	开始编写；
         *			完成； 
         *********************************************************************************/
-        public override int makeframe(ref FrameHeadStr frmhead, Byte[] ptoutput, bool multwrite)
+        public override int makeframe(byte[] input_buf, int input_len, byte[] output_buf, ref int output_len)
         {
+            
             int result = 0;
             UInt16 outputnum = 0;
             int writeBytenum = 0;
             UInt16 crccalc = 0;
             Byte btemp;
+            Boolean multwrite = false;
 
-            FrameHeadStr framehead = frmhead;
+            FrameHeadStr framehead;
+            framehead.values = new byte[10];
+            framehead = (FrameHeadStr)CFunc.BytesToStruct(input_buf, typeof(FrameHeadStr));
+            
+
             outputnum = (UInt16)(framehead.affirmstr.amounthi * 256 + framehead.affirmstr.amountlw);
             // 地址
             if (framehead.address > MAX_DEVICE_ADDR)
             {
-                ptoutput[0] = ERR_CHECKSUM;         // 无效地址
+                output_buf[0] = ERR_CHECKSUM;         // 无效地址
                 return result;
             }
 
@@ -1081,25 +1103,25 @@ namespace 智能电容器
                         writeBytenum = outputnum / 8;
                     break;
                 case FUN_WRITEVARADDR:          // address func 6 字节 SN 码 逻辑地址 crc  
-                    ptoutput[result++] = framehead.address;
-                    ptoutput[result++] = FUN_WRITEVARADDR;
-                    Array.Copy(framehead.values, 0, ptoutput, result, 7);
+                    output_buf[result++] = framehead.address;
+                    output_buf[result++] = FUN_WRITEVARADDR;
+                    Array.Copy(framehead.values, 0, output_buf, result, 7);
                     result += 7;
-                    crccalc = GetCRC16(ptoutput, (Byte)result, 0);
-                    ptoutput[result++] = (byte)((crccalc >> 8) & 0xff);
-                    ptoutput[result++] = (byte)(crccalc & 0xff);
-                    //Array.Copy(CFunc.u16memcpy(crccalc), 0, ptoutput, result, 2);
+                    crccalc = GetCRC16(output_buf, (Byte)result, 0);
+                    output_buf[result++] = (byte)((crccalc >> 8) & 0xff);
+                    output_buf[result++] = (byte)(crccalc & 0xff);
+                    //Array.Copy(CFunc.u16memcpy(crccalc), 0, output_buf, result, 2);
                     //result += 2;
                     return result;
                 case FUN_REGISTRTU:             // address func option value crc	 option 1:通知，2：上报
-                    ptoutput[result++] = framehead.address;
-                    ptoutput[result++] = FUN_REGISTRTU;
-                    Array.Copy(framehead.values, 0, ptoutput, result, 2);
+                    output_buf[result++] = framehead.address;
+                    output_buf[result++] = FUN_REGISTRTU;
+                    Array.Copy(framehead.values, 0, output_buf, result, 2);
                     result += 2;
-                    crccalc = GetCRC16(ptoutput, (Byte)result, 0);
-                    ptoutput[result++] = (byte)((crccalc >> 8) & 0xff);
-                    ptoutput[result++] = (byte)(crccalc & 0xff);
-                    //Array.Copy(CFunc.u16memcpy(crccalc), 0, ptoutput, result, 2);
+                    crccalc = GetCRC16(output_buf, (Byte)result, 0);
+                    output_buf[result++] = (byte)((crccalc >> 8) & 0xff);
+                    output_buf[result++] = (byte)(crccalc & 0xff);
+                    //Array.Copy(CFunc.u16memcpy(crccalc), 0, output_buf, result, 2);
                     //result += 2;
                     return result;
             }
@@ -1116,22 +1138,22 @@ namespace 智能电容器
                 framehead.affirmstr.amountlw = btemp;
             }
 
-            CFunc.structcopytomem(framehead, ptoutput, 6);
+            CFunc.structcopytomem(framehead, output_buf, 6);
 
             if (multwrite)    // 多线圈、多寄存器
             {
-                ptoutput[result++] = (Byte)writeBytenum;
+                output_buf[result++] = (Byte)writeBytenum;
                 if (CGlobalCtrl.CommLSB)
                 {
                     Array.Reverse(framehead.values);
                 }
 
-                Array.Copy(framehead.values, 0, ptoutput, result, writeBytenum);
+                Array.Copy(framehead.values, 0, output_buf, result, writeBytenum);
                 result += writeBytenum;
             }
-            crccalc = GetCRC16(ptoutput, (Byte)result, 0);
-            ptoutput[result++] = (byte)((crccalc >> 8) & 0xff);
-            ptoutput[result++] = (byte)(crccalc  & 0xff);            
+            crccalc = GetCRC16(output_buf, (Byte)result, 0);
+            output_buf[result++] = (byte)((crccalc >> 8) & 0xff);
+            output_buf[result++] = (byte)(crccalc  & 0xff);            
 
             return result;
         }

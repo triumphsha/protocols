@@ -10,6 +10,7 @@ using System.Xml;
 using CCXml;
 using DevComponents.DotNetBar.SuperGrid;
 using System.Collections;
+using System.Runtime.InteropServices;
 
 namespace 智能电容器
 {
@@ -251,7 +252,7 @@ namespace 智能电容器
         private void dgvwModbus_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             Byte[] sendbuf = new Byte[256];
-            int sendlen;
+            int sendlen=0;
             UInt16 datalen;
             string datastr;
             string datatypestr;
@@ -304,7 +305,8 @@ namespace 智能电容器
                 }
 
                 CCommFrame CommFrame = new CCommFrame();
-                sendlen = CGlobalCtrl.Modbushost.makeframe(ref FrameHead, sendbuf, false);
+                //sendlen = CGlobalCtrl.Modbushost.makeframe(ref FrameHead, sendbuf, false);
+                sendlen = CGlobalCtrl.Modbushost.makeframe(CFunc.StructToBytes(FrameHead), Marshal.SizeOf(FrameHead), sendbuf, ref sendlen);
                 CommFrame.FillContent(sendbuf, sendlen, CGlobalCtrl.CommNum);
                 CommFrame.ShowIndex = e.RowIndex;
                 // 通道加入发送帧
@@ -398,7 +400,7 @@ namespace 智能电容器
 
           
                 Byte[] sendbuf = new Byte[256];
-                int sendlen;
+                int sendlen=0;
                 UInt16 datalen=0,subdatalen=0;
             UInt16 regaddr=0,regnum=0;
                 string datastr;
@@ -503,8 +505,9 @@ namespace 智能电容器
                 }
 
                     CCommFrame CommFrame = new CCommFrame();
-                    sendlen = CGlobalCtrl.Modbushost.makeframe(ref FrameHead, sendbuf, false);
-                    CommFrame.FillContent(sendbuf, sendlen, CGlobalCtrl.CommNum);
+                //sendlen = CGlobalCtrl.Modbushost.makeframe(ref FrameHead, sendbuf, false);
+                sendlen = CGlobalCtrl.Modbushost.makeframe(CFunc.StructToBytes(FrameHead), Marshal.SizeOf(FrameHead), sendbuf, ref sendlen);
+                CommFrame.FillContent(sendbuf, sendlen, CGlobalCtrl.CommNum);
                     CommFrame.ShowIndex = RowIndex;
                     // 通道加入发送帧
                     CGlobalCtrl.Comms[CGlobalCtrl.CommNum - 1].FillFrame(CommFrame);

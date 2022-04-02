@@ -10,6 +10,7 @@ using System.Xml;
 using CCXml;
 using DevComponents.DotNetBar.SuperGrid;
 using System.Collections;
+using System.Runtime.InteropServices;
 
 namespace 智能电容器
 {
@@ -22,6 +23,8 @@ namespace 智能电容器
         /// <param name="param"></param>
         delegate void delegateSetCommFrame(CommEventArgs param, bool flag);
 
+        private GridRow CtrlGetRow = new GridRow();
+
         public frmDL645GW()
         {
             InitializeComponent();
@@ -32,8 +35,7 @@ namespace 智能电容器
             mTimer.Tick += MTimer_Tick;
             mTimer.Start();
         }
-
-
+        
         private void MTimer_Tick(object sender, EventArgs e)
         {
             // 处理系统对时信息
@@ -44,7 +46,12 @@ namespace 智能电容器
         private void InitializeData()
         {
             string[] orderArray = { "Asterids", "Eudicots", "Rosids" };
-            XmlNodeList GetNodeList = XMLHelper.GetXmlNodeListByXpath(System.Environment.CurrentDirectory + "\\数据结构\\规约测试项配置.xml", "//protocol//item");
+            string cmdRead = "";
+            string cmdReadNext = "";
+            string cmdWrite = "";
+            int groupFlag = 0x01;
+
+            XmlNodeList GetNodeList = XMLHelper.GetXmlNodeListByXpath(System.Environment.CurrentDirectory + "\\数据结构\\DL645_GWPD.xml", "//protocol//item");
             GridPanel SGridPanel = sgridDL645GW.PrimaryGrid;
             SGridPanel.Rows.Clear();
             SGridPanel.Columns["gridColumn8"].EditorType = typeof(FlowerButton_o);
@@ -55,22 +62,53 @@ namespace 智能电容器
             for (int i = 0; i < GetNodeList.Count; i++)
             {
                 // item 
-                GridRow GetRow = new GridRow(GetNodeList[i].Attributes["name"].Value.ToString(), "", "", "", "", "", "",
-                            GetNodeList[i].Attributes["mwritefunc"].Value.ToString(), GetNodeList[i].Attributes["readfunc"].Value.ToString());
+                cmdRead = GetNodeList[i].Attributes["readfunc"].Value.ToString();
+                cmdWrite = GetNodeList[i].Attributes["writefunc"].Value.ToString();
+                groupFlag = Convert.ToInt16(GetNodeList[i].Attributes["group"].Value);
+                GridRow GetRow = new GridRow(GetNodeList[i].Attributes["name"].Value.ToString(), "", "", "", "", "", "", "", "");
                 GetRow.Tag = "P" + GetNodeList[i].Attributes["id"].Value.ToString();
 
-                XmlNodeList GetSubNodeList = GetNodeList[i].ChildNodes;
-                for (int j = 0; j < GetSubNodeList.Count; j++)
+                if (groupFlag == 1)
                 {
-                    XmlNodeList GetSSubNodeList = GetSubNodeList[j].ChildNodes;
+                    // group
+                    XmlNodeList GetSubNodeList = GetNodeList[i].ChildNodes;
+                    for (int j = 0; j < GetSubNodeList.Count; j++)
+                    {
+                        GridRow GetSubRow = new GridRow(GetSubNodeList[j].Attributes["name"].Value.ToString(), GetSubNodeList[j].Attributes["flag"].Value.ToString(), "", "",
+                                                        "", "", "", cmdWrite, cmdRead);
+                        GetSubRow.Tag = GetRow.Tag +",G" + j.ToString();
 
-                    GridRow GetSubRow = new GridRow(GetSSubNodeList[0].InnerXml.ToString(), GetSSubNodeList[1].InnerXml.ToString(), GetSSubNodeList[2].InnerXml.ToString(), GetSSubNodeList[3].InnerXml.ToString(),
-                                                GetSSubNodeList[4].InnerXml.ToString(), "终端", GetSSubNodeList[5].InnerXml.ToString());
-                    GetSubRow.Tag = "C" + j.ToString();
-                    GetRow.Rows.Add(GetSubRow);
+                        XmlNodeList GetSubSubNodeList = GetSubNodeList[j].ChildNodes;
+                        for (int k = 0; k < GetSubSubNodeList.Count; k++)
+                        {
+                            XmlNodeList GetSSubNodeList = GetSubSubNodeList[k].ChildNodes;
+
+                            GridRow GetSubSubRow = new GridRow(GetSSubNodeList[0].InnerXml.ToString(), GetSSubNodeList[1].InnerXml.ToString(), GetSSubNodeList[2].InnerXml.ToString(), GetSSubNodeList[3].InnerXml.ToString(),
+                                                        GetSSubNodeList[4].InnerXml.ToString(), "终端", GetSSubNodeList[5].InnerXml.ToString(), cmdWrite, cmdRead);
+                            GetSubSubRow.Tag = GetSubRow.Tag + ",C" + k.ToString();
+
+                            GetSubRow.Rows.Add(GetSubSubRow);
+                        }
+                        GetRow.Rows.Add(GetSubRow);
+                    }
+                }
+                else
+                {
+                    XmlNodeList GetSubNodeList = GetNodeList[i].ChildNodes;
+                    for (int j = 0; j < GetSubNodeList.Count; j++)
+                    {
+                        XmlNodeList GetSSubNodeList = GetSubNodeList[j].ChildNodes;
+
+                        GridRow GetSubSubRow = new GridRow(GetSSubNodeList[0].InnerXml.ToString(), GetSSubNodeList[1].InnerXml.ToString(), GetSSubNodeList[2].InnerXml.ToString(), GetSSubNodeList[3].InnerXml.ToString(),
+                                                    GetSSubNodeList[4].InnerXml.ToString(), "终端", GetSSubNodeList[5].InnerXml.ToString(), cmdWrite, cmdRead);
+                        GetSubSubRow.Tag = GetRow.Tag + ",C" + j.ToString();
+
+                        GetRow.Rows.Add(GetSubSubRow);
+                    }
                 }
                 SGridPanel.Rows.Add(GetRow);
             }
+            CGlobalCtrl.Comms[0].Protocol = new CDL645();
 
             CGlobalCtrl.Comms[0].CommEvent += FrmDL645GW_CommEvent;
         }
@@ -89,36 +127,36 @@ namespace 智能电容器
                     string datatypestr;
                     CCommFrame CommFrame = param.CommFrame;
                     GridPanel SGridPanel = sgridDL645GW.PrimaryGrid;
-                    GridRow GetRow = (GridRow)SGridPanel.Rows[CommFrame.ShowIndex];
-                    int startindex = 0, datalen = 0, checkstart = -1;
+                    GridRow GetRow = CommFrame.ShowRow;// (GridRow)SGridPanel.Rows[CommFrame.ShowIndex];
+                    int startindex = 0, datalen = 0, checkstart = -1,rate=0;
                     Byte[] temp;
                     object getValue = new object();
                     string showstr = "";
 
                     if (CommFrame.FrameResope == 0x66)
                     {
-                        showstr = CGlobalCtrl.Modbushost.GetErrorStr(Convert.ToInt16(CommFrame.GetRecvContent()[0]));
+                        //showstr = CGlobalCtrl.Modbushost.GetErrorStr(Convert.ToInt16(CommFrame.GetRecvContent()[0]));
                         GetRow.Cells[5].Value = showstr;
-
                     }
                     else
                     {
-                        GetRow.Cells[5].Value = "解析成功！";
+                        //GetRow.Cells[5].Value = "解析成功！";
                         try
                         {
-                            for (int i = 0; i < GetRow.Rows.Count; i++)
-                            {
-                                GridRow GetSubRow = (GridRow)GetRow.Rows[i];
-                                if (GetSubRow.Checked)
-                                {
-                                    if (CommFrame.FrameIndex <= 0x04)
-                                    {
-                                        if (checkstart == -1)
-                                            checkstart = i;
+                            //for (int i = 0; i < GetRow.Rows.Count; i++)
+                            //{
+                            //    GridRow GetSubRow = (GridRow)GetRow.Rows[i];
+                            //    if (GetSubRow.Checked)
+                            //    {
+                            //        if (CommFrame.FrameIndex <= 0x04)
+                            //        {
+                            //            if (checkstart == -1)
+                            //                checkstart = i;
 
-                                        datatypestr = GetSubRow.Cells[2].Value.ToString().Trim();
-                                        datalen = Convert.ToInt32(GetSubRow.Cells[3].Value.ToString().Trim());
-                                        temp = new Byte[datalen];
+                                        datatypestr = GetRow.Cells[2].Value.ToString().Trim();
+                                        datalen = Convert.ToInt32(GetRow.Cells[3].Value.ToString().Trim());
+                                        rate = Convert.ToInt32(GetRow.Cells[6].Value.ToString().Trim());
+                            temp = new Byte[datalen];
                                         Array.Copy(CommFrame.GetRecvContent(), startindex, temp, 0, datalen);
                                         switch (datatypestr)
                                         {
@@ -127,33 +165,33 @@ namespace 智能电容器
                                                 showstr = getValue.ToString();
                                                 break;
                                             case "BCD":
-                                                showstr = BitConverter.ToString(temp).Replace("-", null);
+                                                showstr = CDL645.DataTrans(temp,datatypestr, datalen, rate);//BitConverter.ToString(temp).Replace("-", null);
                                                 break;
                                             case "BIT":
-                                                showstr = (temp[0] & (Byte)Math.Pow(2, i - checkstart)) > 0 ? "1" : "0";
+                                                //showstr = (temp[0] & (Byte)Math.Pow(2, i - checkstart)) > 0 ? "1" : "0";
                                                 break;
                                         }
-                                        GetSubRow.Cells[5].Value = showstr;
+                            GetRow.Cells[5].Value = showstr;
 
-                                        if (datatypestr == "BIT")
-                                        {
-                                            if (i > 0 && (i % 8) == 0)
-                                            {
-                                                startindex += 1;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            startindex += datalen;
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    if (datalen > 0)
-                                        break;
-                                }
-                            }
+                                        //if (datatypestr == "BIT")
+                                        //{
+                                        //    if (i > 0 && (i % 8) == 0)
+                                        //    {
+                                        //        startindex += 1;
+                                        //    }
+                                        //}
+                                        //else
+                                        //{
+                                        //    startindex += datalen;
+                                        //}
+                                //    }
+                                //}
+                                //else
+                                //{
+                                //    if (datalen > 0)
+                                //        break;
+                                //}
+                            //}
                         }
                         catch (Exception ex)
                         {
@@ -172,10 +210,10 @@ namespace 智能电容器
         private void FrmDL645GW_CommEvent(object sender, CommEventArgs e)
         {
             //if(sender.GetType()=="")
-            if (superTabControl2.SelectedTabIndex == 1)
+            //if (superTabControl2.SelectedTabIndex == 1)
                 SetCommFrame(e, true);
-            if (superTabControl2.SelectedTabIndex == 0)
-                SetCommFrame(e, false);
+            //if (superTabControl2.SelectedTabIndex == 0)
+            //    SetCommFrame(e, false);
         }
 
 
@@ -249,126 +287,88 @@ namespace 智能电容器
 
         void FlowerButtonClick(object sender, EventArgs e)
         {
-            string buttentext = EditorCell.Value as string;
+            GridButtonXEditControl btn = (GridButtonXEditControl)sender;
 
-          
-                Byte[] sendbuf = new Byte[256];
-                int sendlen;
-                UInt16 datalen=0,subdatalen=0;
-            UInt16 regaddr=0,regnum=0;
-                string datastr;
-                string datatypestr;
-                Byte[] temp;
-                FrameHeadStr FrameHead = new FrameHeadStr();
-            int RowIndex = EditorCell.RowIndex;
-            int ColumnIndex = EditorCell.ColumnIndex;
+            string buttentext = btn.EditorCell.Value as string;
 
-            //if (e.RowIndex < 0 || e.RowIndex > dgvwModbus.RowCount - 2) return;
+            Byte[] sendbuf = new Byte[256];
+            int sendlen=0;
+            UInt16 datalen = 0, subdatalen = 0;
+            string datastr;
+            string datatypestr;
+            DL645HeadStr FrameHead = new DL645HeadStr();
+            FrameHead.address = new byte[6];
+            FrameHead.didt = new byte[4];
+            FrameHead.msgload = new byte[100];
+            int RowIndex = btn.EditorCell.RowIndex;
+            int ColumnIndex = btn.EditorCell.ColumnIndex;
+
             // 规约数据项选择下发
             if (ColumnIndex == 7 || ColumnIndex == 8)
             {
 
-                GridRow GetRow = EditorCell.GridRow;
+                GridRow GetRow = btn.EditorCell.GridRow;
                 if (GetRow.Cells[ColumnIndex].Value.ToString().Trim() == "")
                 {
                     //CDebugInfo.writelogctrl(null, "命令不能为空", 0);
                     MessageBox.Show(this, "命令不能为空", "警告");
                     return;
                 }
+                else
+                    FrameHead.func = Convert.ToByte(GetRow.Cells[ColumnIndex].Value.ToString().Trim(), 16);
 
-                for (int i = 0; i < GetRow.Rows.Count; i++)
+                // dl645 di dt data item
+                FrameHead.didt[3] = Convert.ToByte(GetRow.Cells[1].Value.ToString().Trim().Substring(0, 2), 16);
+                FrameHead.didt[2] = Convert.ToByte(GetRow.Cells[1].Value.ToString().Trim().Substring(2, 2), 16);
+                FrameHead.didt[1] = Convert.ToByte(GetRow.Cells[1].Value.ToString().Trim().Substring(4, 2), 16);
+                FrameHead.didt[0] = Convert.ToByte(GetRow.Cells[1].Value.ToString().Trim().Substring(6, 2), 16);
+
+                // fill content
+                if (FrameHead.func == 0x14) // set param
                 {
-                    GridRow GetSubRow = (GridRow)GetRow.Rows[i];
-
-                    if (GetSubRow.Checked)
+                    datatypestr = GetRow.Cells[2].Value.ToString().Trim();
+                    datastr = GetRow.Cells[4].Value.ToString().Trim();
+                    subdatalen = (UInt16)(Convert.ToUInt16(GetRow.Cells[3].Value));
+                    FrameHead.msglen = CDL645.DataFill(FrameHead.msgload, datatypestr, datastr, subdatalen);
+                    if (FrameHead.msglen < 0)
                     {
-                        if (regaddr == 0)
-                        {
-                            regaddr = Convert.ToUInt16(GetSubRow.Cells[1].Value.ToString().Trim(), 16);
-                        }
-
-
-                        subdatalen = (UInt16)(Convert.ToUInt16(GetSubRow.Cells[3].Value));
-                        if (ColumnIndex == 7)
-                        {
-                            datatypestr = GetSubRow.Cells[2].Value.ToString().Trim();
-                            datastr = GetSubRow.Cells[4].Value.ToString().Trim();
-                            frmModbus.FillGuiValue(out FrameHead.values, datastr, datatypestr, subdatalen);
-                            Array.Copy(FrameHead.values, 0, sendbuf, datalen, subdatalen);
-                        }
-                        datalen += subdatalen;
-                    }
-                    else
-                    {
-                        if (regaddr > 0)
-                            break;
-
+                        MessageBox.Show(this, "数据转换出错", "错误");
+                        return;
                     }
                 }
-
-                // 数据装载
-                Array.Resize<Byte>(ref FrameHead.values, datalen);
-                Array.Copy(sendbuf, FrameHead.values, datalen);
+                else if (FrameHead.func == 0x11) // call param
+                {
+                    if (GetRow.Tag.ToString().Contains("P6") || GetRow.Tag.ToString().Contains("P7") ||
+                        GetRow.Tag.ToString().Contains("P8"))
+                    {
+                        datatypestr = GetRow.Cells[2].Value.ToString().Trim();
+                        datastr = GetRow.Cells[4].Value.ToString().Trim();
+                        subdatalen = (UInt16)(Convert.ToUInt16(GetRow.Cells[3].Value));
+                        FrameHead.msglen = CDL645.DataFill(FrameHead.msgload, datatypestr, datastr, subdatalen);
+                        if (FrameHead.msglen < 0)
+                        {
+                            MessageBox.Show(this, "数据转换出错", "错误");
+                            return;
+                        }
+                    }
+                }
 
                 // 地址
-                FrameHead.address = (Byte)CGlobalCtrl.ProtocolAddress;
-                // 功能码
-                FrameHead.funcode = Convert.ToByte(GetRow.Cells[ColumnIndex].Value.ToString().Trim(), 16);
+                FrameHead.address = new byte[6] { 0,0,0,0,0,0 };
+                FrameHead.address[0] = CFunc.HEX2BCD((byte)CGlobalCtrl.ProtocolAddress);
+                // Array.Copy( CGlobalCtrl.CommAddress,FrameHead.address, 6);
 
-                // 寄存器地址
-                temp = CFunc.u16memcpy(regaddr);
-                FrameHead.affirmstr.startlw = temp[0];
-                FrameHead.affirmstr.starthi = temp[1];
+                CCommFrame CommFrame = new CCommFrame();
+                sendlen = CGlobalCtrl.Comms[0].Protocol.makeframe(CFunc.StructToBytes(FrameHead), Marshal.SizeOf(FrameHead), sendbuf, ref sendlen);
+                CommFrame.FillContent(sendbuf, sendlen, 0);
+                CommFrame.ShowIndex = RowIndex;
+                CommFrame.ShowRow = GetRow;
+                // 通道加入发送帧
+                CGlobalCtrl.Comms[0].FillFrame(CommFrame);
 
-                // 寄存器数量
-                if (FrameHead.funcode == 0x0f || FrameHead.funcode ==0x01)
-                {
-                    regnum = datalen;
-                }
-                else
-                {
-                    regnum = (UInt16)(datalen / 2);
-                }
-                temp = CFunc.u16memcpy(regnum);
-                FrameHead.affirmstr.amountlw = temp[0];
-                FrameHead.affirmstr.amounthi = temp[1];
-
-                if (ColumnIndex == 7)  // 设置
-                {
-                    if (FrameHead.funcode == 0x0f)
-                    {
-                        if (regnum == 1)
-                            FrameHead.funcode = 0x05;
-                        else
-                        {
-                            datalen = (UInt16)CFunc.bitstobytes(FrameHead.values,sendbuf);
-                            Array.Resize<Byte>(ref FrameHead.values, datalen);
-                            Array.Copy(sendbuf, FrameHead.values, datalen);
-                        }
-                    }
-                    else if (FrameHead.funcode == 0x10)
-                    {
-                        if (regnum == 1)
-                            FrameHead.funcode = 0x06;
-                    }
-                }
-                else if (ColumnIndex == 8) // 查询
-                {
-
-                }
-
-                    CCommFrame CommFrame = new CCommFrame();
-                    sendlen = CGlobalCtrl.Modbushost.makeframe(ref FrameHead, sendbuf, false);
-                    CommFrame.FillContent(sendbuf, sendlen, CGlobalCtrl.CommNum);
-                    CommFrame.ShowIndex = RowIndex;
-                    // 通道加入发送帧
-                    CGlobalCtrl.Comms[CGlobalCtrl.CommNum - 1].FillFrame(CommFrame);
-
-                    CDebugInfo.writeconsole(RowIndex.ToString(), ColumnIndex.ToString());
-                }
+                CDebugInfo.writeconsole(RowIndex.ToString(), ColumnIndex.ToString());
             }
-        
-
+        }
         #endregion
     }
 }
